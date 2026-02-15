@@ -1,6 +1,5 @@
-
-  (function () {
-    const DESKTOP_MIN_WIDTH = 992; // >= 992 is desktop (your original was > 991)
+(function () {
+    const DESKTOP_MIN_WIDTH = 992;
     const HOVER_CLOSE_DELAY = 500;
 
     function isDesktop() {
@@ -16,23 +15,38 @@
       );
     }
 
+    function getArrow(trigger, group) {
+      // Prefer arrow inside trigger (your new structure)
+      const arrowInTrigger = trigger.querySelector('.nav-dropdown-arrow');
+      if (arrowInTrigger) return arrowInTrigger;
+      // Fallback: anywhere in group
+      return group ? group.querySelector('.nav-dropdown-arrow') : null;
+    }
+
+    function syncArrowToContent(contentEl, arrowEl) {
+      if (!arrowEl || !contentEl) return;
+      const isOpen = contentEl.classList.contains('open');
+      arrowEl.classList.toggle('open', isOpen);
+    }
+
     function setOpenState(contentEl, arrowEl, shouldOpen) {
-      if (shouldOpen) {
-        contentEl.classList.add('open');
-        if (arrowEl) arrowEl.classList.add('open');
-      } else {
-        contentEl.classList.remove('open');
-        if (arrowEl) arrowEl.classList.remove('open');
-      }
+      if (!contentEl) return;
+      contentEl.classList.toggle('open', shouldOpen);
+      if (arrowEl) arrowEl.classList.toggle('open', shouldOpen);
     }
 
     function closeAllDropdowns(exceptContentEl) {
       document.querySelectorAll('.nav-dropdown-content.open').forEach((content) => {
         if (exceptContentEl && content === exceptContentEl) return;
 
-        // Find the arrow inside the same dropdown group and remove .open from it too
-        const group = content.closest('.nav-dropdown') || content.closest('.w-dropdown') || content.parentElement;
-        const arrow = group ? group.querySelector('.nav-dropdown-arrow') : null;
+        const group =
+          content.closest('.nav-dropdown') ||
+          content.closest('.w-dropdown') ||
+          content.parentElement;
+
+        // try to find trigger in this group so we can reliably find arrow in trigger
+        const trigger = group ? group.querySelector('.nav-dropdown-trigger') : null;
+        const arrow = trigger ? getArrow(trigger, group) : (group ? group.querySelector('.nav-dropdown-arrow') : null);
 
         setOpenState(content, arrow, false);
       });
@@ -45,12 +59,18 @@
       const content = group.querySelector('.nav-dropdown-content');
       if (!content) return;
 
-      const arrow = group.querySelector('.nav-dropdown-arrow'); // NEW
+      const arrow = getArrow(trigger, group);
       const closeBtn = group.querySelector('.close-nav-dropdown');
 
       let hoverTimeout;
 
+      // 1) Always keep arrow synced to whatever happens to content.open (Webflow interaction, other scripts, etc.)
+      syncArrowToContent(content, arrow);
+      const observer = new MutationObserver(() => syncArrowToContent(content, arrow));
+      observer.observe(content, { attributes: true, attributeFilter: ['class'] });
+
       function openDropdown() {
+        closeAllDropdowns(content);
         setOpenState(content, arrow, true);
       }
 
@@ -58,46 +78,37 @@
         setOpenState(content, arrow, false);
       }
 
-      function showDropdownDesktop() {
+      // Desktop hover
+      trigger.addEventListener('mouseenter', () => {
         if (!isDesktop()) return;
         clearTimeout(hoverTimeout);
-        closeAllDropdowns(content);
         openDropdown();
-      }
+      });
 
-      function hideDropdownWithDelayDesktop() {
+      trigger.addEventListener('mouseleave', () => {
         if (!isDesktop()) return;
-        hoverTimeout = setTimeout(() => {
-          closeDropdown();
-        }, HOVER_CLOSE_DELAY);
-      }
+        hoverTimeout = setTimeout(() => closeDropdown(), HOVER_CLOSE_DELAY);
+      });
 
-      function handleMobileClick(e) {
+      content.addEventListener('mouseenter', () => clearTimeout(hoverTimeout));
+      content.addEventListener('mouseleave', () => {
+        if (!isDesktop()) return;
+        hoverTimeout = setTimeout(() => closeDropdown(), HOVER_CLOSE_DELAY);
+      });
+
+      // Mobile click
+      trigger.addEventListener('click', (e) => {
         if (isDesktop()) return;
 
-        // If the trigger contains/overlaps links and you still want navigation, remove this.
+        // If your trigger is a link and should navigate, remove the next line.
         e.preventDefault();
 
         const isOpen = content.classList.contains('open');
-        if (isOpen) {
-          closeDropdown();
-        } else {
-          closeAllDropdowns(content);
-          openDropdown();
-        }
-      }
+        if (isOpen) closeDropdown();
+        else openDropdown();
+      });
 
-      // Desktop hover behavior
-      trigger.addEventListener('mouseenter', showDropdownDesktop);
-      trigger.addEventListener('mouseleave', hideDropdownWithDelayDesktop);
-
-      content.addEventListener('mouseenter', () => clearTimeout(hoverTimeout));
-      content.addEventListener('mouseleave', hideDropdownWithDelayDesktop);
-
-      // Mobile click behavior
-      trigger.addEventListener('click', handleMobileClick);
-
-      // Optional close button
+      // Close button inside dropdown (mobile)
       if (closeBtn) {
         closeBtn.addEventListener('click', (e) => {
           e.preventDefault();
@@ -105,14 +116,14 @@
         });
       }
 
-      // Close on outside click (mobile only)
+      // Outside click close (mobile only)
       document.addEventListener('click', (e) => {
         if (isDesktop()) return;
         if (group.contains(e.target)) return;
         closeDropdown();
       });
 
-      // Close on ESC
+      // ESC close
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         closeDropdown();
@@ -120,24 +131,27 @@
     }
 
     function initAll() {
-      const triggers = document.querySelectorAll('.nav-dropdown-trigger');
-      triggers.forEach(initDropdown);
+      document.querySelectorAll('.nav-dropdown-trigger').forEach(initDropdown);
     }
 
-    // DOM ready safety
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initAll);
     } else {
       initAll();
     }
 
-    // Reset on resize (matches your original behavior)
+    // Reset on resize
     window.addEventListener('resize', () => {
-      document.querySelectorAll('.nav-dropdown-content.open').forEach((content) => {
-        const group = content.closest('.nav-dropdown') || content.closest('.w-dropdown') || content.parentElement;
-        const arrow = group ? group.querySelector('.nav-dropdown-arrow') : null;
+      document.querySelectorAll('.nav-dropdown-content').forEach((content) => {
+        const group =
+          content.closest('.nav-dropdown') ||
+          content.closest('.w-dropdown') ||
+          content.parentElement;
+
+        const trigger = group ? group.querySelector('.nav-dropdown-trigger') : null;
+        const arrow = trigger ? trigger.querySelector('.nav-dropdown-arrow') : (group ? group.querySelector('.nav-dropdown-arrow') : null);
+
         setOpenState(content, arrow, false);
       });
     });
   })();
-
