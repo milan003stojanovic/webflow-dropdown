@@ -1,4 +1,4 @@
->
+
   (function () {
     const DESKTOP_MIN_WIDTH = 992; // >= 992 is desktop (your original was > 991)
     const HOVER_CLOSE_DELAY = 500;
@@ -140,3 +140,4 @@
       });
     });
   })();
+
