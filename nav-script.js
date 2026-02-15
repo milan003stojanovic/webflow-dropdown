@@ -1,24 +1,12 @@
-
-  // Multi-dropdown version (supports many nav dropdowns with the same internal structure)
-  // Expected structure per dropdown "group":
-  // - .nav-dropdown-trigger
-  // - .nav-dropdown-content
-  // - optional: .close-nav-dropdown (inside content, or anywhere in the same group)
-  //
-  // Tip: Wrap each dropdown group in a shared parent like .nav-dropdown (recommended),
-  // but this will also work by matching trigger -> nearest parent -> find content within it.
-
+>
   (function () {
-    const DESKTOP_MIN_WIDTH = 992; // >991 is desktop in your original script
+    const DESKTOP_MIN_WIDTH = 992; // >= 992 is desktop (your original was > 991)
     const HOVER_CLOSE_DELAY = 500;
 
     function isDesktop() {
       return window.innerWidth >= DESKTOP_MIN_WIDTH;
     }
 
-    // Helper: find the "group" container for a trigger
-    // Best case: you have a wrapper like .nav-dropdown around each set.
-    // Fallback: use closest common Webflow-ish wrappers.
     function getGroupFromTrigger(trigger) {
       return (
         trigger.closest('.nav-dropdown') ||
@@ -28,10 +16,25 @@
       );
     }
 
+    function setOpenState(contentEl, arrowEl, shouldOpen) {
+      if (shouldOpen) {
+        contentEl.classList.add('open');
+        if (arrowEl) arrowEl.classList.add('open');
+      } else {
+        contentEl.classList.remove('open');
+        if (arrowEl) arrowEl.classList.remove('open');
+      }
+    }
+
     function closeAllDropdowns(exceptContentEl) {
       document.querySelectorAll('.nav-dropdown-content.open').forEach((content) => {
         if (exceptContentEl && content === exceptContentEl) return;
-        content.classList.remove('open');
+
+        // Find the arrow inside the same dropdown group and remove .open from it too
+        const group = content.closest('.nav-dropdown') || content.closest('.w-dropdown') || content.parentElement;
+        const arrow = group ? group.querySelector('.nav-dropdown-arrow') : null;
+
+        setOpenState(content, arrow, false);
       });
     }
 
@@ -42,61 +45,63 @@
       const content = group.querySelector('.nav-dropdown-content');
       if (!content) return;
 
+      const arrow = group.querySelector('.nav-dropdown-arrow'); // NEW
       const closeBtn = group.querySelector('.close-nav-dropdown');
 
       let hoverTimeout;
 
-      function showDropdown() {
-        if (!isDesktop()) return;
-        clearTimeout(hoverTimeout);
-        // Optional: only one open at a time on desktop too
-        closeAllDropdowns(content);
-        content.classList.add('open');
+      function openDropdown() {
+        setOpenState(content, arrow, true);
       }
 
-      function hideDropdownWithDelay() {
+      function closeDropdown() {
+        setOpenState(content, arrow, false);
+      }
+
+      function showDropdownDesktop() {
+        if (!isDesktop()) return;
+        clearTimeout(hoverTimeout);
+        closeAllDropdowns(content);
+        openDropdown();
+      }
+
+      function hideDropdownWithDelayDesktop() {
         if (!isDesktop()) return;
         hoverTimeout = setTimeout(() => {
-          content.classList.remove('open');
+          closeDropdown();
         }, HOVER_CLOSE_DELAY);
       }
 
       function handleMobileClick(e) {
         if (isDesktop()) return;
 
-        // Prevent navigating if trigger is an <a> and you want it to behave like a toggle
-        // If your trigger should still navigate, remove the next line.
+        // If the trigger contains/overlaps links and you still want navigation, remove this.
         e.preventDefault();
 
         const isOpen = content.classList.contains('open');
         if (isOpen) {
-          content.classList.remove('open');
+          closeDropdown();
         } else {
-          // On mobile, open this and close others
           closeAllDropdowns(content);
-          content.classList.add('open');
+          openDropdown();
         }
       }
 
-      function closeDropdownMobile() {
-        content.classList.remove('open');
-      }
-
       // Desktop hover behavior
-      trigger.addEventListener('mouseenter', showDropdown);
-      trigger.addEventListener('mouseleave', hideDropdownWithDelay);
+      trigger.addEventListener('mouseenter', showDropdownDesktop);
+      trigger.addEventListener('mouseleave', hideDropdownWithDelayDesktop);
 
       content.addEventListener('mouseenter', () => clearTimeout(hoverTimeout));
-      content.addEventListener('mouseleave', hideDropdownWithDelay);
+      content.addEventListener('mouseleave', hideDropdownWithDelayDesktop);
 
       // Mobile click behavior
       trigger.addEventListener('click', handleMobileClick);
 
-      // Optional close button (mobile)
+      // Optional close button
       if (closeBtn) {
         closeBtn.addEventListener('click', (e) => {
           e.preventDefault();
-          closeDropdownMobile();
+          closeDropdown();
         });
       }
 
@@ -104,13 +109,13 @@
       document.addEventListener('click', (e) => {
         if (isDesktop()) return;
         if (group.contains(e.target)) return;
-        content.classList.remove('open');
+        closeDropdown();
       });
 
-      // Optional: close on ESC when focused inside this group
+      // Close on ESC
       document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        content.classList.remove('open');
+        closeDropdown();
       });
     }
 
@@ -119,18 +124,19 @@
       triggers.forEach(initDropdown);
     }
 
-    // Ensure DOM is ready (Webflow pages often load scripts before elements)
+    // DOM ready safety
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', initAll);
     } else {
       initAll();
     }
 
-    // Remove .open if window is resized (matches your original behavior)
+    // Reset on resize (matches your original behavior)
     window.addEventListener('resize', () => {
       document.querySelectorAll('.nav-dropdown-content.open').forEach((content) => {
-        content.classList.remove('open');
+        const group = content.closest('.nav-dropdown') || content.closest('.w-dropdown') || content.parentElement;
+        const arrow = group ? group.querySelector('.nav-dropdown-arrow') : null;
+        setOpenState(content, arrow, false);
       });
     });
   })();
-
